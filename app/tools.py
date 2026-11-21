@@ -5,6 +5,7 @@
 """
 
 import json
+import random
 from functools import cache
 from pathlib import Path
 
@@ -34,7 +35,7 @@ def search_glossary(query: str) -> str:
     """講座の用語集から用語を検索し、定義と、どの回で扱うかを返す。
 
     AIエンジニアリングの用語や、この講座（AIE2026）に固有の言葉について
-    答える前に使うこと。query には調べたい用語を1つだけ入れる（例: "LoRA"）。
+    答える前に使うこと。query には調べたい用語をまとめて入れる（例: "LoRA, QLoRA"）。
     """
     q = _normalize(query)
     if not q:
@@ -126,3 +127,33 @@ def search_graph(query: str) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
     except APIError as e:
         return json.dumps({"error": api_error_message(e.code)}, ensure_ascii=False)
+
+
+def make_quiz(lecture: int) -> str:
+    """指定した回（1始まりの整数）の講義に関する確認問題を1問返す。
+
+    「第2回の確認問題を出して」のように頼まれたときに使う。第N回の用語一覧から1つをランダムに選び、
+    問題と答えを JSON で返す。モデルはこの結果をそのまま出題文に使う。
+    """
+    if lecture <= 0:
+        return f"第{lecture}回の確認問題はまだありません。1以上の回番号を指定してください。"
+
+    glossary = load_glossary()
+    terms = [entry for entry in glossary if entry["lecture"] == lecture]
+    if not terms:
+        available = sorted({entry["lecture"] for entry in glossary})
+        if available:
+            return (
+                f"第{lecture}回の用語はまだありません。"
+                f"用意されている回: {', '.join(str(v) for v in available)}"
+            )
+        return f"第{lecture}回の確認問題はまだありません。"
+
+    term = random.choice(terms)
+    return json.dumps(
+        {
+            "question": f"「{term['term']}」の意味は？",
+            "answer": term["definition"],
+        },
+        ensure_ascii=False,
+    )
